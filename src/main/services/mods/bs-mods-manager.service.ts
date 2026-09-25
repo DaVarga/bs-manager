@@ -10,7 +10,7 @@ import { deleteFile, deleteFolder, pathExist, Progression } from "../../helpers/
 import { lastValueFrom, Observable } from "rxjs";
 import recursiveReadDir from "recursive-readdir";
 import { sToMs } from "../../../shared/helpers/time.helpers";
-import { copyFile, ensureDir, pathExistsSync, readdirSync } from "fs-extra";
+import { copyFile, ensureDir, pathExistsSync, readdirSync, readFile, writeFile } from "fs-extra";
 import { CustomError } from "shared/models/exceptions/custom-error.class";
 import { popElement } from "shared/helpers/array.helpers";
 import { LinuxService } from "../linux.service";
@@ -18,6 +18,7 @@ import { tryit } from "shared/helpers/error.helpers";
 import crypto from "crypto";
 import { BsmZipExtractor } from "main/models/bsm-zip-extractor.class";
 import { BsmShellLog, bsmSpawn } from "main/helpers/os.helpers";
+import { setDotNet32BitRequired } from "main/helpers/dotnet.helpers";
 import { BbmFullMod, BbmModVersion, ExternalMod } from "../../../shared/models/mods/mod.interface";
 
 export class BsModsManagerService {
@@ -156,11 +157,38 @@ export class BsModsManagerService {
             return false;
         }
 
-        const command = await this.getCommand(ipaPath, bsExePath, args);
-        if (!command) {
-            return false;
+        const runnableIpaPath = await this.getRunnableIpaPath(ipaPath);
+        try {
+            const command = await this.getCommand(runnableIpaPath, bsExePath, args);
+            if (!command) {
+                return false;
+            }
+
+            return await this.spawnIPA(command, versionPath);
+        } finally {
+            if (runnableIpaPath !== ipaPath) {
+                await deleteFile(runnableIpaPath).catch(e => log.error("Could not delete x86 IPA copy", e));
+            }
+        }
+    }
+
+    /**
+     * IPA.exe is an AnyCPU .NET assembly. ARM64 Wine runs those as native ARM64
+     * processes, but wine-mono only ships x86/x86_64 builds, so Mono fails to load.
+     * Run a copy flagged 32BITREQUIRED instead, which Wine runs as x86 through FEX.
+     * IPA.exe itself is left untouched since its hash is checked.
+     */
+    private async getRunnableIpaPath(ipaPath: string): Promise<string> {
+        if (process.platform !== "linux" || !tryit(() => this.linuxService.isArm64Wine()).result) {
+            return ipaPath;
         }
 
+        const x86IpaPath = path.join(path.dirname(ipaPath), "IPA.x86.exe");
+        await writeFile(x86IpaPath, setDotNet32BitRequired(await readFile(ipaPath)));
+        return x86IpaPath;
+    }
+
+    private spawnIPA(command: { env: Record<string, string>; command: string }, versionPath: string): Promise<boolean> {
         return new Promise<boolean>(resolve => {
             const processIPA = bsmSpawn(command.command, {
                 log: BsmShellLog.Command | BsmShellLog.EnvVariables,
