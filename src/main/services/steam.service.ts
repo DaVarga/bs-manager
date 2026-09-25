@@ -13,7 +13,10 @@ import { SteamShortcut, SteamShortcutData } from "../../shared/models/steam/shor
 const { list } = (execOnOs({ win32: () => require("regedit-rs") }, true) ?? {}) as typeof import("regedit-rs");
 
 export class SteamService {
-    private static readonly PROCESS_NAME: string = process.platform === "linux" ? "steam-runtime-launcher-service" : "steam.exe";
+    // The x86_64 Linux client runs steam-runtime-launcher-service, the ARM64 client (e.g. Steam Frame) does not
+    private static readonly PROCESS_NAMES: string[] = process.platform === "linux"
+        ? ["steam-runtime-launcher-service", "steamrtarm64/steam"]
+        : ["steam.exe"];
 
     private static instance: SteamService;
 
@@ -42,7 +45,7 @@ export class SteamService {
     }
 
     public async isSteamRunning(): Promise<boolean> {
-        const steamProcessRunning = await isProcessRunning(SteamService.PROCESS_NAME);
+        const steamProcessRunning = await this.isAnySteamProcessRunning();
         if (process.platform === "linux") {
             return steamProcessRunning;
         }
@@ -50,8 +53,23 @@ export class SteamService {
         return steamProcessRunning && !!activeUser;
     }
 
+    private async isAnySteamProcessRunning(): Promise<boolean> {
+        for (const processName of SteamService.PROCESS_NAMES) {
+            if (await isProcessRunning(processName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public async getSteamPid(): Promise<number> {
-        return getProcessId(SteamService.PROCESS_NAME);
+        for (const processName of SteamService.PROCESS_NAMES) {
+            const pid = await getProcessId(processName);
+            if (pid) {
+                return pid;
+            }
+        }
+        return null;
     }
 
     /**
