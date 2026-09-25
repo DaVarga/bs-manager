@@ -441,7 +441,9 @@ export abstract class AbstractLauncherService {
                 launchedAfter: process.platform === "linux"
                     ? new Date(Math.floor(Date.now() / 1_000) * 1_000)
                     : new Date(),
-                ...(IS_FLATPAK ? { launchToken: randomUUID() } : {}),
+                // Wine detaches the game from the launcher (double fork + setsid), so on Linux
+                // parent/process-group matching cannot find it; tag it through the environment instead.
+                ...(process.platform === "linux" ? { launchToken: randomUUID() } : {}),
             };
         } catch (error) {
             log.warn("Could not snapshot existing Beat Saber processes; continuing without launch ownership", error);

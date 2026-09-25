@@ -284,12 +284,29 @@ export async function getProcessesByName(name: string, launchToken?: string): Pr
     const matchingProcesses = processes.filter(process => processMatchesName(process, name));
     const metadata = await getLinuxProcessMetadata(matchingProcesses.map(process => process.pid));
     const processesById = new Map(processes.map(process => [process.pid, process]));
-    return Promise.all(matchingProcesses.map(async processDetails => ({
-        ...processDetails,
-        ...metadata.get(processDetails.pid),
-        ancestorPids: getAncestorPids(processDetails.pid, processesById),
-        startMarker: await getLinuxProcessStartMarker(processDetails.pid),
-    })));
+    const processesDetails = await Promise.all(matchingProcesses.map(async processDetails => {
+        const processLaunchToken = await getLinuxProcessLaunchToken(processDetails.pid);
+        return {
+            ...processDetails,
+            ...metadata.get(processDetails.pid),
+            ancestorPids: getAncestorPids(processDetails.pid, processesById),
+            startMarker: await getLinuxProcessStartMarker(processDetails.pid),
+            ...(processLaunchToken ? { launchToken: processLaunchToken } : {}),
+        };
+    }));
+    return launchToken
+        ? processesDetails.filter(processDetails => processDetails.launchToken === launchToken)
+        : processesDetails;
+}
+
+async function getLinuxProcessLaunchToken(processId: number): Promise<string | undefined> {
+    try {
+        const environ = await readFile(`/proc/${processId}/environ`, "utf8");
+        const prefix = `${BSM_LAUNCH_TOKEN_ENV}=`;
+        return environ.split("\0").find(variable => variable.startsWith(prefix))?.slice(prefix.length) || undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 async function getProcessIdWindows(name: string): Promise<number | null> {
