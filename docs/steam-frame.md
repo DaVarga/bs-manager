@@ -42,18 +42,9 @@ From a PC over SSH you can use a real keyboard, or just paste.
 Set this up once on the Frame:
 
 1. **Settings → System → Enable Developer Mode.**
-2. In Konsole, give the `steamos` user a password (SteamOS has none by default):
-   ```sh
-   passwd
-   ```
-3. Turn on the SSH server:
-   ```sh
-   sudo systemctl enable --now sshd
-   ```
-4. Find the Frame's IP address, for example `192.168.1.56` (use the `wlan0` line):
-   ```sh
-   ip -4 -brief addr
-   ```
+2. In the developer settings, set a **password** for the `steamos` user. SSH is then available.
+3. Find the Frame's IP address, for example `192.168.1.56`, in the network settings or in your
+   router.
 
 Then on your PC, open **PowerShell** (Windows 10/11 ships `ssh`) or a terminal (Linux, macOS) and
 connect:
@@ -65,11 +56,7 @@ ssh steamos@192.168.1.56
 Answer `yes` to the fingerprint question the first time, enter the password, and paste the install
 command.
 
-Anyone on your network who knows the password can log in while SSH is on. To turn it off again:
-
-```sh
-sudo systemctl disable --now sshd
-```
+Anyone on your network who knows the password can log in, so pick a good one.
 
 ## Native ARM64 Beat Saber
 
