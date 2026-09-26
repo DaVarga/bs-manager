@@ -1,5 +1,18 @@
 <a name="readme-top"></a>
 
+> [!NOTE]
+> **Steam Frame fork.** This fork runs on ARM64 SteamOS (Steam Frame) and adds an **ARM64 tab**
+> that installs a native ARM64 build of Beat Saber 1.44.1
+> ([bs-arm64](https://github.com/DaVarga/bs-arm64)), with or without mods. Install or update:
+>
+> ```sh
+> curl -fsSL https://github.com/DaVarga/bs-manager/releases/latest/download/install.sh | bash
+> ```
+>
+> This sets up the AppImage in `~/Applications`, a menu entry, the BeatSaver OneClick links and a
+> Steam library entry (so it shows up in VR). `… | bash -s -- --uninstall` removes it again.
+> Unofficial; the original project is [Zagrios/bs-manager](https://github.com/Zagrios/bs-manager).
+
 <!-- PROJECT SHIELDS -->
 <!--
 *** I'm using markdown "reference style" links for readability.
