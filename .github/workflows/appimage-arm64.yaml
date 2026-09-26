@@ -75,7 +75,7 @@ jobs:
                   - **ARM64 tab** for Beat Saber 1.44.1: installs the native ARM64 build from
                     [bs-arm64](https://github.com/DaVarga/bs-arm64), with or without mod support
 
-                  Install or update (menu entry, BeatSaver OneClick links, Steam library / VR menu):
+                  Install or update (menu entry, BeatSaver OneClick links):
                   ```sh
                   curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
                   ```
