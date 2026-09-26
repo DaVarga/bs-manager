@@ -43,15 +43,16 @@ Set this up once on the Frame:
 
 1. **Settings → System → Enable Developer Mode.**
 2. In the developer settings, set a **password** for the `steamos` user. SSH is then available.
-3. Find the Frame's IP address, for example `192.168.1.56`, in the network settings or in your
-   router.
 
 Then on your PC, open **PowerShell** (Windows 10/11 ships `ssh`) or a terminal (Linux, macOS) and
 connect:
 
 ```sh
-ssh steamos@192.168.1.56
+ssh steamos@frame
 ```
+
+Depending on your network, the Frame is reachable as `frame`, `frame.lan` or `frame.local`. If
+none of them works, use its IP address from your router, for example `ssh steamos@192.168.1.56`.
 
 Answer `yes` to the fingerprint question the first time, enter the password, and paste the install
 command.
