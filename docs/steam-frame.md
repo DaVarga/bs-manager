@@ -54,8 +54,14 @@ ssh steamos@frame
 Depending on your network, the Frame is reachable as `frame`, `frame.lan` or `frame.local`. If
 none of them works, use its IP address from your router, for example `ssh steamos@192.168.1.56`.
 
-Answer `yes` to the fingerprint question the first time, enter the password, and paste the install
-command.
+Answer `yes` to the fingerprint question the first time and enter the password. Then run the
+install command:
+
+```sh
+curl -fsSL https://github.com/DaVarga/bs-manager/releases/latest/download/install.sh | bash
+```
+
+When it prints `done`, BSManager is in the Frame's **Launch program** list (see Option A, step 4).
 
 ## Native ARM64 Beat Saber
 
