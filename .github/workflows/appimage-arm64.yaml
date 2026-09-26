@@ -51,7 +51,8 @@ jobs:
                       args+=("-c.extraMetadata.version=${GITHUB_REF_NAME#v}")
                   fi
                   pnpm exec electron-builder "${args[@]}"
-                  (cd release/build && sha256sum *.AppImage > SHA256SUMS)
+                  cp scripts/install-steam-frame.sh release/build/install.sh
+                  (cd release/build && sha256sum *.AppImage install.sh > SHA256SUMS)
 
             - uses: actions/upload-artifact@v4
               with:
@@ -59,6 +60,7 @@ jobs:
                   path: |
                       release/build/*.AppImage
                       release/build/latest-linux-arm64.yml
+                      release/build/install.sh
                       release/build/SHA256SUMS
 
             - name: Create release
@@ -73,10 +75,14 @@ jobs:
                   - **ARM64 tab** for Beat Saber 1.44.1: installs the native ARM64 build from
                     [bs-arm64](https://github.com/DaVarga/bs-arm64), with or without mod support
 
-                  Run it: `chmod +x BSManager-*-arm64.AppImage && ./BSManager-*-arm64.AppImage`
+                  Install or update (menu entry, BeatSaver OneClick links, Steam library / VR menu):
+                  ```sh
+                  curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash
+                  ```
+                  Or download the AppImage and run it directly.
 
                   Unofficial fork of [BSManager](https://github.com/Zagrios/bs-manager).
                   EOF
                   gh release create "$GITHUB_REF_NAME" release/build/*.AppImage \
-                      release/build/latest-linux-arm64.yml release/build/SHA256SUMS \
+                      release/build/latest-linux-arm64.yml release/build/install.sh release/build/SHA256SUMS \
                       --verify-tag --title "BSManager $GITHUB_REF_NAME (ARM64 / Steam Frame)" --notes-file notes.md
