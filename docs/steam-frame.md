@@ -56,8 +56,6 @@ ssh steamos@192.168.1.56
 Answer `yes` to the fingerprint question the first time, enter the password, and paste the install
 command.
 
-Anyone on your network who knows the password can log in, so pick a good one.
-
 ## Native ARM64 Beat Saber
 
 BSManager runs the x64 version of Beat Saber through emulation. For **1.44.1** it can install a
