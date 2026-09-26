@@ -1,0 +1,82 @@
+# ARM64 Linux AppImage (e.g. for the Steam Frame).
+#   push a tag v<version>-frame.<n>  -> build and publish a GitHub release in this repository
+#   run manually                     -> build only (AppImage as a workflow artifact)
+# The build's auto-updater points at this repository's releases, not upstream's.
+
+name: AppImage ARM64
+
+on:
+    push:
+        tags: ["v*-frame.*"]
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    appimage:
+        runs-on: ubuntu-24.04-arm
+
+        steps:
+            - name: Check out Git repository
+              uses: actions/checkout@v4
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+              with:
+                  version: 10.34.4
+
+            - uses: ./.github/actions/setup-downloader
+
+            - name: Use Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+                  cache: "pnpm"
+                  cache-dependency-path: |
+                      pnpm-lock.yaml
+                      release/app/pnpm-lock.yaml
+
+            # Native modules need lifecycle scripts, restricted by allowBuilds.
+            - run: pnpm install --frozen-lockfile # NOSONAR
+            - name: Build Linux downloader
+              run: pnpm run build-rust-scripts
+            - run: pnpm run build
+
+            - name: Build AppImage
+              run: |
+                  args=(--config electron-builder.config.js --publish never --linux AppImage --arm64
+                        "-c.publish.owner=${{ github.repository_owner }}")
+                  if [ "${{ github.ref_type }}" = tag ]; then
+                      args+=("-c.extraMetadata.version=${GITHUB_REF_NAME#v}")
+                  fi
+                  pnpm exec electron-builder "${args[@]}"
+                  (cd release/build && sha256sum *.AppImage > SHA256SUMS)
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: bsmanager-appimage-arm64
+                  path: |
+                      release/build/*.AppImage
+                      release/build/latest-linux-arm64.yml
+                      release/build/SHA256SUMS
+
+            - name: Create release
+              if: github.ref_type == 'tag'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  cat > notes.md <<'EOF'
+                  BSManager for ARM64 Linux (Steam Frame), with:
+
+                  - ARM64 Proton support (IPA as x86, ARM64 Steam client, launch tracking)
+                  - **ARM64 tab** for Beat Saber 1.44.1: installs the native ARM64 build from
+                    [bs-arm64](https://github.com/DaVarga/bs-arm64), with or without mod support
+
+                  Run it: `chmod +x BSManager-*-arm64.AppImage && ./BSManager-*-arm64.AppImage`
+
+                  Unofficial fork of [BSManager](https://github.com/Zagrios/bs-manager).
+                  EOF
+                  gh release create "$GITHUB_REF_NAME" release/build/*.AppImage \
+                      release/build/latest-linux-arm64.yml release/build/SHA256SUMS \
+                      --verify-tag --title "BSManager $GITHUB_REF_NAME (ARM64 / Steam Frame)" --notes-file notes.md
