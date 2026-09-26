@@ -70,11 +70,20 @@ sudo systemctl disable --now sshd
 BSManager runs the x64 version of Beat Saber through emulation. For **1.44.1** it can install a
 native ARM64 build instead, which needs less than half the CPU time per frame:
 
-1. Download or select Beat Saber **1.44.1** in BSManager (work on a copy if you want to keep the x64
-   version: the menu at the top right → **Clone**).
-2. Open the **ARM64** tab next to Mods and click **Install**. Keep **Mod support** checked to use
-   BSIPA mods.
-3. Launch as usual.
+1. Download or select Beat Saber **1.44.1** in BSManager. To keep the x64 version too, work on a
+   copy: gear menu at the top right → **Clone**.
+
+   ![Version menu with Clone](images/steam-frame/bsm-clone.webp)
+
+2. Open the **ARM64** tab next to Mods and click **Install**. Keep **Mod support (BSIPA)** checked to
+   use mods.
+
+   ![ARM64 tab before installing](images/steam-frame/bsm-arm64-tab.webp)
+
+3. When the log ends with `done`, the version is native. Launch it as usual. **Reinstall** after a
+   Proton update, and **Uninstall** puts the x64 files back.
+
+   ![ARM64 tab after installing](images/steam-frame/bsm-arm64-installed.webp)
 
 Details: [bs-arm64](https://github.com/DaVarga/bs-arm64).
 
