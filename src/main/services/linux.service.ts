@@ -11,6 +11,8 @@ import { LaunchMods } from "shared/models/bs-launch/launch-option.interface";
 import { SteamShortcutData } from "shared/models/steam/shortcut.model";
 import { buildBsLaunchArgs } from "./bs-launcher/abstract-launcher.service";
 import { parseLaunchOptions } from "main/helpers/launchOptions.helper";
+import { tryit } from "shared/helpers/error.helpers";
+import { isBsArm64Installed, isBsArm64ModsDisabled } from "main/helpers/bs-arm64.helpers";
 
 export class LinuxService {
     private static instance: LinuxService;
@@ -45,7 +47,7 @@ export class LinuxService {
 
     // === Launching === //
 
-    private getCompatDataPath() {
+    public getCompatDataPath() {
         const sharedFolder = this.installLocationService.sharedContentPath();
         return path.resolve(sharedFolder, "compatdata");
     }
@@ -55,6 +57,20 @@ export class LinuxService {
         return await this.isNixOS()
             ? `steam-run "${protonPath}" run`
             : `"${protonPath}" run`;
+    }
+
+    public getProtonFolder(): string | undefined {
+        return this.staticConfig.has("proton-folder") ? this.staticConfig.get("proton-folder") : undefined;
+    }
+
+    // Build of the selected Proton from its "version" file ("<timestamp> proton-11.0-2c-arm64")
+    public getProtonBuild(): string | undefined {
+        const folder = this.getProtonFolder();
+        const versionFile = folder && path.join(folder, "version");
+        if (!versionFile || !fs.existsSync(versionFile)) {
+            return undefined;
+        }
+        return fs.readFileSync(versionFile, "utf8").trim().split(/\s+/)[1];
     }
 
     private async getProtonPath(): Promise<string> {
@@ -106,6 +122,10 @@ export class LinuxService {
             "OXR_NO_TEXTURE_SOURCE_ALPHA": "1",
         };
 
+        if (isBsArm64Installed(bsFolderPath)) {
+            Object.assign(envVars, this.buildBsArm64EnvVariables(bsFolderPath));
+        }
+
         if (launchOptions.launchMods?.includes(LaunchMods.PROTON_LOGS)) {
             envVars.PROTON_LOG = "1";
             envVars.PROTON_LOG_DIR = path.join(bsFolderPath, "Logs");
@@ -116,6 +136,28 @@ export class LinuxService {
         }
 
         return envVars;
+    }
+
+    // Native ARM64 instance (bs-arm64): see bs-arm64.service.ts
+    private buildBsArm64EnvVariables(bsFolderPath: string): Record<string, string> {
+        const runtimeDir = path.join(this.getCompatDataPath(), "pfx", "drive_c", "bs-arm64");
+        const builtFor = tryit(() => fs.readFileSync(path.join(runtimeDir, "proton-version"), "utf8").trim()).result;
+        const protonBuild = this.getProtonBuild();
+        if (builtFor !== protonBuild) {
+            throw CustomError.fromError(
+                new Error(`Native ARM64 files were set up for ${builtFor}, but Proton is ${protonBuild}`),
+                BSLaunchError.BS_ARM64_PROTON_MISMATCH
+            );
+        }
+
+        return {
+            // lsteamclient_a64 / wineopenxr_a64 Wine builtins
+            WINEDLLPATH: runtimeDir,
+            // Without mod support BSIPA's x64 Doorstop is still there: never load it
+            WINEDLLOVERRIDES: isBsArm64ModsDisabled(bsFolderPath) ? "winhttp=b" : "winhttp=n,b",
+            // Valve's fdm_injection layer spins forever in vkCreateDevice under Proton ARM64
+            DISABLE_VULKAN_FDM_INJECTION_LAYER: "1",
+        };
     }
 
     public async setProtonFolder(protonFolder: string): Promise<boolean> {

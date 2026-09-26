@@ -1,0 +1,272 @@
+import path from "node:path";
+import crypto from "node:crypto";
+import { createReadStream } from "node:fs";
+import fs from "fs-extra";
+import log from "electron-log";
+import { Observable, lastValueFrom, tap } from "rxjs";
+import { BSVersion } from "shared/bs-version.interface";
+import {
+    BS_ARM64_REPOSITORY,
+    BS_ARM64_SUPPORTED_VERSIONS,
+    BsArm64Error,
+    BsArm64InstallOptions,
+    BsArm64Progress,
+    BsArm64Status,
+    BsArm64Unsupported,
+} from "shared/models/bs-arm64/bs-arm64.model";
+import { CustomError } from "shared/models/exceptions/custom-error.class";
+import { tryit } from "shared/helpers/error.helpers";
+import { BsmShellLog, bsmSpawn } from "main/helpers/os.helpers";
+import { IS_FLATPAK } from "main/constants";
+import { BS_ARM64_STATE_DIR, isBsArm64Installed, isBsArm64ModsDisabled } from "main/helpers/bs-arm64.helpers";
+import { BSLocalVersionService } from "./bs-local-version.service";
+import { InstallationLocationService } from "./installation-location.service";
+import { LinuxService } from "./linux.service";
+import { RequestService } from "./request.service";
+
+// Written by BSManager next to it: which release (and where it's unpacked) patched the instance
+const RELEASE_FILE = "bsm-release.json";
+
+export type GithubRelease = {
+    tag_name: string;
+    draft: boolean;
+    prerelease: boolean;
+    assets: { name: string; browser_download_url: string }[];
+};
+
+type InstalledRelease = { tag: string; dir: string };
+
+/**
+ * Newest release asset built for the given Proton build. Assets are named
+ * bs-arm64-<tag>-<PROTON_TAG>.tar.gz, and Proton's version file says e.g.
+ * "proton-11.0-2c-arm64" for PROTON_TAG "proton-11.0-2c". GitHub lists releases newest first.
+ */
+export function findBsArm64ReleaseAsset(releases: GithubRelease[], protonBuild: string | undefined) {
+    if (!protonBuild) {
+        return undefined;
+    }
+    return releases
+        .filter(release => !release.draft && !release.prerelease)
+        .flatMap(release => release.assets.map(asset => ({ release, asset })))
+        .find(({ release, asset }) => {
+            const prefix = `bs-arm64-${release.tag_name}-`;
+            if (!asset.name.startsWith(prefix) || !asset.name.endsWith(".tar.gz")) {
+                return false;
+            }
+            const protonTag = asset.name.slice(prefix.length, -".tar.gz".length);
+            return protonBuild === protonTag || protonBuild.startsWith(`${protonTag}-`);
+        });
+}
+
+/**
+ * Installs the native ARM64 runtime from https://github.com/DaVarga/bs-arm64 into a
+ * Beat Saber instance. The release matching the selected Proton build is downloaded,
+ * verified and unpacked into BSManager's cache, and its bs-arm64.sh does the rest.
+ */
+export class BsArm64Service {
+    private static instance: BsArm64Service;
+
+    public static getInstance(): BsArm64Service {
+        if (!BsArm64Service.instance) {
+            BsArm64Service.instance = new BsArm64Service();
+        }
+        return BsArm64Service.instance;
+    }
+
+    private readonly linux = LinuxService.getInstance();
+    private readonly localVersions = BSLocalVersionService.getInstance();
+    private readonly installLocation = InstallationLocationService.getInstance();
+    private readonly request = RequestService.getInstance();
+
+    private constructor() {}
+
+    public async getStatus(version: BSVersion): Promise<BsArm64Status> {
+        const versionPath = await this.localVersions.getVersionPath(version);
+        const installed = isBsArm64Installed(versionPath);
+        const status: BsArm64Status = {
+            installed,
+            mods: installed && !isBsArm64ModsDisabled(versionPath),
+            protonVersion: this.linux.getProtonBuild(),
+        };
+
+        if (installed) {
+            status.installedProtonVersion = await this.readStateFile(versionPath, "proton-version");
+            status.installedRelease = (await this.readInstalledRelease(versionPath))?.tag;
+        }
+
+        if (process.platform !== "linux" || process.arch !== "arm64") {
+            status.unsupported = BsArm64Unsupported.NOT_LINUX_ARM64;
+        } else if (!tryit(() => this.linux.isArm64Wine()).result) {
+            status.unsupported = BsArm64Unsupported.PROTON_NOT_ARM64;
+        } else if (!BS_ARM64_SUPPORTED_VERSIONS.includes(version.BSVersion)) {
+            status.unsupported = BsArm64Unsupported.VERSION_NOT_SUPPORTED;
+        }
+
+        return status;
+    }
+
+    public install(version: BSVersion, options: BsArm64InstallOptions): Observable<BsArm64Progress> {
+        return new Observable<BsArm64Progress>(obs => {
+            (async () => {
+                const versionPath = await this.localVersions.getVersionPath(version);
+                const release = await this.prepareRelease(msg => obs.next(msg));
+                const args = ["install", this.quote(versionPath), ...this.prefixArgs()];
+                if (!options.mods) {
+                    args.push("--no-mods");
+                }
+                await this.runInstaller(release.dir, args, msg => obs.next(msg));
+                await fs.writeJson(path.join(versionPath, BS_ARM64_STATE_DIR, RELEASE_FILE), release);
+            })().then(() => obs.complete(), err => obs.error(err));
+        });
+    }
+
+    public uninstall(version: BSVersion): Observable<BsArm64Progress> {
+        return new Observable<BsArm64Progress>(obs => {
+            (async () => {
+                const versionPath = await this.localVersions.getVersionPath(version);
+                const installed = await this.readInstalledRelease(versionPath);
+                const dir = installed && await fs.pathExists(path.join(installed.dir, "bs-arm64.sh"))
+                    ? installed.dir
+                    : (await this.prepareRelease(msg => obs.next(msg))).dir;
+                await this.runInstaller(dir, ["uninstall", this.quote(versionPath), ...this.prefixArgs()], msg => obs.next(msg));
+            })().then(() => obs.complete(), err => obs.error(err));
+        });
+    }
+
+    /**
+     * Installing or updating BSIPA puts its x64 winhttp.dll and MonoMod.Core.dll back.
+     * Run the installer again so the instance gets the ARM64 ones.
+     */
+    public async reapplyAfterBsipaChange(version: BSVersion): Promise<void> {
+        const versionPath = await this.localVersions.getVersionPath(version);
+        if (!isBsArm64Installed(versionPath) || isBsArm64ModsDisabled(versionPath)) {
+            return;
+        }
+        log.info("BSIPA changed in a native ARM64 instance, re-applying the ARM64 mod loader fixes");
+        await lastValueFrom(this.install(version, { mods: true }), { defaultValue: undefined });
+    }
+
+    // === Release === //
+
+    private releasesDir(): string {
+        return path.join(this.installLocation.cachePath(), "bs-arm64");
+    }
+
+    /** Newest release built for the selected Proton build, downloaded and unpacked. */
+    private async prepareRelease(progress: (p: BsArm64Progress) => void): Promise<InstalledRelease> {
+        const protonBuild = this.linux.getProtonBuild();
+        const { data: releases } = await this.request.getJSON<GithubRelease[]>(
+            `https://api.github.com/repos/${BS_ARM64_REPOSITORY}/releases`
+        );
+
+        const match = findBsArm64ReleaseAsset(releases, protonBuild);
+
+        if (!match) {
+            throw new CustomError(`No bs-arm64 release for ${protonBuild}`, BsArm64Error.NO_MATCHING_RELEASE, protonBuild);
+        }
+
+        const { release, asset } = match;
+        const name = asset.name.slice(0, -".tar.gz".length);
+        const dir = path.join(this.releasesDir(), name);
+        if (await fs.pathExists(path.join(dir, "bs-arm64.sh"))) {
+            progress({ log: `Using ${name}` });
+            return { tag: release.tag_name, dir };
+        }
+
+        await fs.ensureDir(this.releasesDir());
+        const tarball = path.join(this.releasesDir(), asset.name);
+        progress({ log: `Downloading ${asset.name}` });
+        await lastValueFrom(this.request.downloadFile(asset.browser_download_url, tarball).pipe(
+            tap(p => p.total && progress({ percent: Math.round((p.current / p.total) * 100) }))
+        ));
+
+        const checksumAsset = release.assets.find(a => a.name === `${asset.name}.sha256`);
+        if (checksumAsset) {
+            const expected = await this.downloadChecksum(checksumAsset.browser_download_url);
+            const actual = await this.sha256(tarball);
+            if (expected !== actual) {
+                await fs.remove(tarball);
+                throw new CustomError(`Checksum mismatch for ${asset.name}`, BsArm64Error.CHECKSUM_MISMATCH);
+            }
+            progress({ log: "Checksum OK" });
+        }
+
+        progress({ log: `Unpacking into ${this.releasesDir()}` });
+        await this.run(`tar -xzf ${this.quote(tarball)} -C ${this.quote(this.releasesDir())}`, progress);
+        await fs.remove(tarball);
+        return { tag: release.tag_name, dir };
+    }
+
+    // "<sha256>  <file name>"
+    private async downloadChecksum(url: string): Promise<string> {
+        const file = path.join(this.releasesDir(), `checksum-${Date.now()}.txt`);
+        await lastValueFrom(this.request.downloadFile(url, file));
+        const text = await fs.readFile(file, "utf8");
+        await fs.remove(file);
+        return text.trim().split(/\s+/)[0];
+    }
+
+    private sha256(file: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const hash = crypto.createHash("sha256");
+            createReadStream(file)
+                .on("data", chunk => hash.update(chunk))
+                .on("error", reject)
+                .on("end", () => resolve(hash.digest("hex")));
+        });
+    }
+
+    // === Installer === //
+
+    private prefixArgs(): string[] {
+        return ["--prefix", this.quote(this.linux.getCompatDataPath()), "--proton", this.quote(this.linux.getProtonFolder())];
+    }
+
+    private async runInstaller(dir: string, args: string[], progress: (p: BsArm64Progress) => void): Promise<void> {
+        try {
+            await this.run(`bash ${this.quote(path.join(dir, "bs-arm64.sh"))} ${args.join(" ")}`, progress);
+        } catch (error) {
+            throw CustomError.fromError(error as Error, BsArm64Error.INSTALLER_FAILED, (error as Error)?.message);
+        }
+    }
+
+    private run(command: string, progress: (p: BsArm64Progress) => void): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const child = bsmSpawn(command, {
+                log: BsmShellLog.Command,
+                flatpak: { host: IS_FLATPAK },
+            });
+            let lastError = "";
+            const forward = (data: Buffer, isError: boolean) => {
+                for (const line of data.toString().split("\n").map(l => l.trimEnd()).filter(Boolean)) {
+                    if (isError) {
+                        log.warn("bs-arm64:", line);
+                        lastError = line;
+                    } else {
+                        log.info("bs-arm64:", line);
+                    }
+                    progress({ log: line });
+                }
+            };
+            child.stdout?.on("data", d => forward(d, false));
+            child.stderr?.on("data", d => forward(d, true));
+            child.once("error", reject);
+            child.once("close", code => (code === 0 ? resolve() : reject(new Error(lastError || `exit code ${code}`))));
+        });
+    }
+
+    // === State === //
+
+    private async readStateFile(versionPath: string, name: string): Promise<string | undefined> {
+        const file = path.join(versionPath, BS_ARM64_STATE_DIR, name);
+        return (await fs.pathExists(file)) ? (await fs.readFile(file, "utf8")).trim() : undefined;
+    }
+
+    private async readInstalledRelease(versionPath: string): Promise<InstalledRelease | undefined> {
+        return fs.readJson(path.join(versionPath, BS_ARM64_STATE_DIR, RELEASE_FILE)).catch((): undefined => undefined);
+    }
+
+    private quote(value: string): string {
+        return `'${value.replaceAll("'", `'"'"'`)}'`;
+    }
+}
