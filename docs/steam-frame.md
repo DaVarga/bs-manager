@@ -20,16 +20,22 @@ From a PC over SSH you can use a real keyboard, or just paste.
 
 ## Option A: on the Frame, with the on-screen keyboard
 
-1. Open **Konsole** (the terminal) from the app menu on the desktop.
-2. Open the on-screen keyboard from VR mode.
+1. In VR, open the dashboard and click **+** in the bar at the bottom. A **Launch program** list
+   opens. Choose **Konsole** (the terminal).
+
+   ![Launch program list with BSManager and Konsole](images/steam-frame/vr-launch-program.webp)
+
+2. Click the **keyboard icon** under the Konsole window to open the on-screen keyboard.
 3. Type the command above exactly and press Enter. Watch out for:
    - `-fsSL`: capital `S` and `L`
    - `|`: the pipe character before `bash`
    - no spaces inside the address
 
-   If the command is open in a browser on the Frame, copy it there and paste it into Konsole
-   with **Ctrl+Shift+V** (or right-click → Paste) instead of typing it.
-4. When it prints `done`, start **BSManager** from the app menu.
+   If the command is open in a browser on the Frame, copy it there and use Konsole's **Paste**
+   button (top right) instead of typing it.
+4. When it prints `done`, close Konsole. **BSManager** is now in the same **Launch program** list.
+
+   ![BSManager in VR: keyboard icon under the window, + in the dashboard bar](images/steam-frame/vr-bsmanager.webp)
 
 ## Option B: from your PC over SSH
 
