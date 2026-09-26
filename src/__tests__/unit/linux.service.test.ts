@@ -5,6 +5,8 @@ import { BS_APP_ID } from "main/constants";
 import { LaunchMod, LaunchMods } from "shared/models/bs-launch/launch-option.interface";
 import { LaunchOption } from "shared/models/bs-launch";
 import { bsmExec } from "main/helpers/os.helpers";
+import { isBsArm64Installed, isBsArm64ModsDisabled } from "main/helpers/bs-arm64.helpers";
+import { BSLaunchError } from "shared/models/bs-launch";
 
 jest.mock("electron", () => ({
     app: { getPath: (name: string) => name === "exe" ? "/opt/BS Manager/bsmanager" : "" },
@@ -26,6 +28,10 @@ jest.mock("main/helpers/os.helpers", () => ({
     BsmShellLog: { Command: 1 },
     bsmExec: jest.fn(),
 }));
+jest.mock("main/helpers/bs-arm64.helpers", () => ({
+    isBsArm64Installed: jest.fn(() => false),
+    isBsArm64ModsDisabled: jest.fn(() => false),
+}));
 
 jest.mock("fs-extra", () => ({
     __esModule: true,
@@ -35,6 +41,7 @@ jest.mock("fs-extra", () => ({
         existsSync: jest.fn(() => true),
         ensureDir: jest.fn(),
         pathExistsSync: jest.fn(() => true),
+        readFileSync: jest.fn(),
         statSync: jest.fn(() => ({ isFile: () => true })),
         writeFile: jest.fn(),
     },
@@ -78,6 +85,58 @@ describe("LinuxService.buildEnvVariables", () => {
         (fs.statSync as jest.Mock).mockReturnValue({ isFile: () => true });
         (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
         (bsmExec as jest.Mock).mockRejectedValue(new Error("not nixos"));
+        (isBsArm64Installed as jest.Mock).mockReturnValue(false);
+        (isBsArm64ModsDisabled as jest.Mock).mockReturnValue(false);
+    });
+
+    describe("native ARM64 instance (bs-arm64)", () => {
+        const runtimeDir = path.join(compatDataPath, "pfx", "drive_c", "bs-arm64");
+
+        // Proton's version file and the Proton build the prefix runtime was set up for
+        function mockProtonBuilds(current: string, installedFor: string) {
+            (fs.readFileSync as jest.Mock).mockImplementation((file: string) => {
+                if (file === path.join("/Proton Experimental", "version")) {
+                    return `1758000000 ${current}\n`;
+                }
+                if (file === path.join(runtimeDir, "proton-version")) {
+                    return `${installedFor}\n`;
+                }
+                throw new Error(`unexpected read ${file}`);
+            });
+        }
+
+        beforeEach(() => {
+            (isBsArm64Installed as jest.Mock).mockReturnValue(true);
+        });
+
+        it("adds the ARM64 runtime dir and keeps BSIPA's Doorstop with mod support", async () => {
+            mockProtonBuilds("proton-11.0-2c-arm64", "proton-11.0-2c-arm64");
+
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(isBsArm64Installed).toHaveBeenCalledWith(bsFolderPath);
+            expect(env).toEqual(expect.objectContaining({
+                WINEDLLPATH: runtimeDir,
+                WINEDLLOVERRIDES: "winhttp=n,b",
+                DISABLE_VULKAN_FDM_INJECTION_LAYER: "1",
+            }));
+        });
+
+        it("never loads Doorstop when installed without mod support", async () => {
+            mockProtonBuilds("proton-11.0-2c-arm64", "proton-11.0-2c-arm64");
+            (isBsArm64ModsDisabled as jest.Mock).mockReturnValue(true);
+
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(env.WINEDLLOVERRIDES).toBe("winhttp=b");
+        });
+
+        it("refuses to launch after a Proton update", async () => {
+            mockProtonBuilds("proton-11.0-3-arm64", "proton-11.0-2c-arm64");
+
+            await expect(buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath))
+                .rejects.toMatchObject({ code: BSLaunchError.BS_ARM64_PROTON_MISMATCH });
+        });
     });
 
     it("uses Proton's utility mode for commands that run inside its prefix", async () => {

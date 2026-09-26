@@ -21,6 +21,7 @@ import { BsmShellLog, bsmSpawn } from "main/helpers/os.helpers";
 import { setDotNet32BitRequired } from "main/helpers/dotnet.helpers";
 import { BbmFullMod, BbmModVersion, ExternalMod } from "../../../shared/models/mods/mod.interface";
 import { SteamService } from "../steam.service";
+import { BsArm64Service } from "../bs-arm64.service";
 
 export class BsModsManagerService {
     private static instance: BsModsManagerService;
@@ -347,6 +348,12 @@ export class BsModsManagerService {
                   return false;
               }))
             : extracted;
+
+        if (isBSIPA && res) {
+            // BSIPA's x64 Doorstop/MonoMod may be back in a native ARM64 instance
+            await BsArm64Service.getInstance().reapplyAfterBsipaChange(version)
+                .catch(e => log.error("Could not re-apply the native ARM64 mod fixes", e));
+        }
 
         return res;
     }
