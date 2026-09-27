@@ -86,6 +86,9 @@ native ARM64 build instead, which needs less than half the CPU time per frame:
 Tip: turn off **Adaptive SFX** (Solo → song selection → **Player Settings** tab next to the song
 list). On ARM64 its loudness measurement is expensive and makes frame times less steady.
 
+Tip: turn off **Screen Distortion** in the game's graphics settings. It costs a lot of GPU time on the
+Frame, and bs-arm64 v0.1.6 shows frozen ghost images with it on.
+
 Details: [bs-arm64](https://github.com/DaVarga/bs-arm64).
 
 ## Update or remove
