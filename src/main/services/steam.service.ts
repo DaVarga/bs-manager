@@ -198,6 +198,40 @@ export class SteamService {
         return folders;
     }
 
+    // Steam user logged in most recently: account id (userdata folder name) from config/loginusers.vdf
+    private async getMostRecentUserId(steamPath: string): Promise<string | undefined> {
+        const loginUsers = await readFile(path.join(steamPath, "config", "loginusers.vdf"), { encoding: "utf-8" })
+            .then(data => parse(data)?.users ?? {})
+            .catch((): Record<string, any> => ({}));
+        const ids = Object.keys(loginUsers).filter(id => /^\d+$/.test(id));
+        const mostRecent = ids.find(id => String(loginUsers[id]?.MostRecent) === "1")
+            ?? ids.sort((a, b) => Number(loginUsers[b]?.timestamp ?? 0) - Number(loginUsers[a]?.timestamp ?? 0))[0];
+        return mostRecent ? (BigInt(mostRecent) - BigInt("76561197960265728")).toString() : undefined;
+    }
+
+    // Per-game "Foveated Rendering" switch in the Steam client (game properties), stored as
+    // apps/<appId>/FDMEnable in the user's localconfig.vdf; absent when off.
+    public async isFoveatedRenderingEnabled(appId: string, steamPath?: string): Promise<boolean> {
+        steamPath ||= await this.getSteamPath();
+        if (!steamPath) {
+            return false;
+        }
+
+        const userId = await this.getMostRecentUserId(steamPath);
+        if (!userId) {
+            return false;
+        }
+
+        const localConfig = await readFile(path.join(steamPath, "userdata", userId, "config", "localconfig.vdf"), { encoding: "utf-8" })
+            .then(data => parse(data))
+            .catch((err): undefined => {
+                log.warn("Could not read Steam localconfig.vdf", err);
+                return undefined;
+            });
+        const apps = localConfig?.UserLocalConfigStore?.Software?.Valve?.Steam?.apps;
+        return String(apps?.[appId]?.FDMEnable) === "1";
+    }
+
     private async getShortcutsPath(userId: number): Promise<string> {
         return path.join(await this.getSteamPath(), "userdata", userId.toString(), "config", "shortcuts.vdf");
     }
