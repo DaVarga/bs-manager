@@ -83,8 +83,8 @@ native ARM64 build instead, which needs less than half the CPU time per frame:
 
    ![ARM64 tab after installing](images/steam-frame/bsm-arm64-installed.webp)
 
-Tip: in the game's player settings, turn off **Adaptive SFX**. On ARM64 its loudness measurement is
-expensive and makes frame times less steady.
+Tip: turn off **Adaptive SFX** (Solo → song selection → **Player Settings** tab next to the song
+list). On ARM64 its loudness measurement is expensive and makes frame times less steady.
 
 Details: [bs-arm64](https://github.com/DaVarga/bs-arm64).
 
