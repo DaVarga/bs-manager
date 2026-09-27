@@ -89,8 +89,9 @@ list). On ARM64 its loudness measurement is expensive and makes frame times less
 Tip: turn off **Screen Distortion** in the game's graphics settings. It costs a lot of GPU time on the
 Frame, and bs-arm64 v0.1.6 shows frozen ghost images with it on.
 
-Foveated rendering: in Steam, open Beat Saber's **Properties** and turn on **Foveated Rendering**.
-BSManager then starts the native version with eye-tracked foveated rendering: the area you look at
+Foveated rendering: open Beat Saber in your **Steam** library → ⚙ → **Properties** → **General** and
+turn on **Foveated Rendering**. BSManager reads that switch and starts the native version with
+eye-tracked foveated rendering: the area you look at
 is rendered at full resolution and the edges at lower resolution, which saves GPU time and battery.
 Eye tracking needs bs-arm64 0.2.0 or later; 0.1.7 uses a fixed profile instead.
 
