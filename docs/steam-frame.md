@@ -7,7 +7,7 @@ curl -fsSL https://github.com/DaVarga/bs-manager/releases/latest/download/instal
 ```
 
 It installs BSManager to `~/Applications/BSManager.AppImage`, adds it to the app menu (a `.desktop`
-entry with icon), and lets BeatSaver's **OneClick** buttons open it. BSManager then updates itself.
+entry with icon), and lets BeatSaver's **OneClick** buttons open it.
 
 There are two ways to run the command. On the Frame itself you type with the on-screen keyboard.
 From a PC over SSH you can use a real keyboard, or just paste.
@@ -15,8 +15,8 @@ From a PC over SSH you can use a real keyboard, or just paste.
 ## Before you start
 
 - Beat Saber in your Steam library.
-- **Proton 11.0 (ARM64)** installed. Steam installs it the first time you start a Windows game;
-  otherwise install it from the library (Tools).
+- **Proton 11.0 (ARM64)** and **Steam Linux Runtime 4.0 for arm64** installed. Steam installs both
+  the first time you start a Windows game; otherwise install them from the library (**Tools**).
 
 ## Option A: on the Frame, with the on-screen keyboard
 
@@ -63,13 +63,27 @@ curl -fsSL https://github.com/DaVarga/bs-manager/releases/latest/download/instal
 
 When it prints `done`, BSManager is in the Frame's **Launch program** list (see Option A, step 4).
 
+## First start
+
+1. BSManager asks for your **Proton folder**. Choose
+   `/home/steamos/.local/share/Steam/steamapps/common/Proton 11.0 (ARM64)`.
+2. Sign in with Steam and download or select Beat Saber **1.44.1**.
+3. In the version's **Launch** tab, enter this as launch command (it stays for all versions):
+   ```
+   DISABLE_VULKAN_FDM_INJECTION_LAYER=1 %command%
+   ```
+   Without it the game hangs at startup: Valve's foveated rendering layer never finishes setting up
+   the graphics device under Proton ARM64.
+4. **Launch** the version once and wait until the menu appears, then quit. The first start takes a
+   while. It creates BSManager's Wine prefix, which mods and the native ARM64 build need.
+
 ## Native ARM64 Beat Saber
 
 BSManager runs the x64 version of Beat Saber through emulation. For **1.44.1** it can install a
 native ARM64 build instead, which needs less than half the CPU time per frame:
 
-1. Download or select Beat Saber **1.44.1** in BSManager. To keep the x64 version too, work on a
-   copy: gear menu at the top right → **Clone**.
+1. Select Beat Saber **1.44.1** in BSManager (launched once, see [First start](#first-start)). To
+   keep the x64 version too, work on a copy: gear menu at the top right → **Clone**.
 
    ![Version menu with Clone](images/steam-frame/bsm-clone.webp)
 
@@ -81,6 +95,11 @@ native ARM64 build instead, which needs less than half the CPU time per frame:
 3. When the log ends with `done`, the version is native. Launch it as usual. **Reinstall** after a
    Proton update, and **Uninstall** puts the x64 files back.
 
+If the install stops with `Wine prefix … does not exist`, Beat Saber was never launched from
+BSManager. That failed install leaves the version half changed, so it won't start either. Launch
+another, unchanged version once (see [First start](#first-start)), then click **Install** again on
+this one; it finishes the install.
+
    ![ARM64 tab after installing](images/steam-frame/bsm-arm64-installed.webp)
 
 Tip: turn off **Adaptive SFX** (Solo → song selection → **Player Settings** tab next to the song
@@ -89,17 +108,18 @@ list). On ARM64 its loudness measurement is expensive and makes frame times less
 Tip: turn off **Screen Distortion** in the game's graphics settings. It costs a lot of GPU time on the
 Frame, and bs-arm64 v0.1.6 shows frozen ghost images with it on.
 
-Foveated rendering: open Beat Saber in your **Steam** library → ⚙ → **Properties** → **Performance** and
-turn on **Foveated Rendering**. BSManager reads that switch and starts the native version with
-eye-tracked foveated rendering: the area you look at
-is rendered at full resolution and the edges at lower resolution, which saves GPU time and battery.
-Eye tracking needs bs-arm64 0.2.0 or later; 0.1.7 uses a fixed profile instead.
+Foveated rendering: open Beat Saber in your **Steam** library → ⚙ → **Properties** → **Performance**
+and turn on **Foveated Rendering**. BSManager reads that switch and starts the native version with
+eye-tracked foveated rendering: the area you look at is rendered at full resolution and the edges at
+lower resolution, which saves GPU time and battery. Eye tracking needs bs-arm64 0.2.0 or later; 0.1.7
+uses a fixed profile instead.
 
 Details: [bs-arm64](https://github.com/DaVarga/bs-arm64).
 
 ## Update or remove
 
-- **Update:** BSManager offers updates itself. Running the install command again also updates.
+- **Update:** run the install command again. BSManager marks itself as **outdated** in its title bar
+  when a new version is out, but it can't update itself yet.
 - **Remove:**
   ```sh
   curl -fsSL https://github.com/DaVarga/bs-manager/releases/latest/download/install.sh | bash -s -- --uninstall
