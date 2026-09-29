@@ -9,6 +9,7 @@ import { BSLaunchError, LaunchOption } from "shared/models/bs-launch";
 import { BsmShellLog, bsmExec } from "main/helpers/os.helpers";
 import { LaunchMods } from "shared/models/bs-launch/launch-option.interface";
 import { buildLinuxDesktopEntry } from "main/helpers/launch-shortcut.helpers";
+import { cleanSearchPath } from "main/helpers/env.helpers";
 import { tryit } from "shared/helpers/error.helpers";
 import { isBsArm64Installed, isBsArm64ModsDisabled } from "main/helpers/bs-arm64.helpers";
 import { SteamService } from "./steam.service";
@@ -120,6 +121,14 @@ export class LinuxService {
             // Fix reflections in Monado
             "OXR_NO_TEXTURE_SOURCE_ALPHA": "1",
         };
+
+        // The AppImage's AppRun puts its own share dir in XDG_DATA_DIRS and appends /usr/share/ again.
+        // The game's Vulkan and OpenXR loaders then find layers such as Valve's fdm_injection twice,
+        // and that one then hangs in vkCreateDevice.
+        const xdgDataDirs = cleanSearchPath(process.env.XDG_DATA_DIRS, process.env.APPDIR);
+        if (xdgDataDirs) {
+            envVars.XDG_DATA_DIRS = xdgDataDirs;
+        }
 
         Object.assign(envVars, await this.buildFoveationEnvVariables(steamPath));
 

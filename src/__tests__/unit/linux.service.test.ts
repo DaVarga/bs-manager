@@ -95,6 +95,25 @@ describe("LinuxService.buildEnvVariables", () => {
         mockFoveatedRendering.mockResolvedValue(false);
     });
 
+    it("gives the game XDG_DATA_DIRS without the AppImage's dirs and duplicates", async () => {
+        const saved = { XDG_DATA_DIRS: process.env.XDG_DATA_DIRS, APPDIR: process.env.APPDIR };
+        process.env.APPDIR = "/tmp/.mount_BSMana1";
+        process.env.XDG_DATA_DIRS = "/tmp/.mount_BSMana1/usr/share/:/usr/local/share:/usr/share:/usr/share/gnome:/usr/local/share/:/usr/share/";
+        try {
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(env.XDG_DATA_DIRS).toBe("/usr/local/share:/usr/share:/usr/share/gnome");
+        } finally {
+            for (const [key, value] of Object.entries(saved)) {
+                if (value === undefined) {
+                    delete process.env[key];
+                } else {
+                    process.env[key] = value;
+                }
+            }
+        }
+    });
+
     describe("SteamVR foveated rendering (Valve's fdm_injection)", () => {
         it("turns the layer off while Steam's Foveated Rendering is off", async () => {
             const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);

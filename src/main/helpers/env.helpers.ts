@@ -147,3 +147,33 @@ export function parseEnvString(envString: string): {
         command: envString.substring(index + 1).trim(),
     }
 }
+
+/**
+ * Cleans a colon-separated search path such as XDG_DATA_DIRS for a child process: drops empty
+ * entries and those inside `excludeDir` (e.g. the AppImage mount), and keeps each directory only
+ * once, whether or not it's written with a trailing slash.
+ */
+export function cleanSearchPath(searchPath: string | undefined, excludeDir?: string): string | undefined {
+    if (!searchPath) {
+        return searchPath;
+    }
+
+    const normalize = (dir: string) => dir.replace(/\/+$/, "") || "/";
+    const excluded = excludeDir ? normalize(excludeDir) : undefined;
+    const seen = new Set<string>();
+    const dirs: string[] = [];
+
+    for (const dir of searchPath.split(":")) {
+        const normalized = normalize(dir);
+        if (!dir || seen.has(normalized)) {
+            continue;
+        }
+        if (excluded && (normalized === excluded || normalized.startsWith(`${excluded}/`))) {
+            continue;
+        }
+        seen.add(normalized);
+        dirs.push(dir);
+    }
+
+    return dirs.join(":");
+}
