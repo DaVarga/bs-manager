@@ -121,8 +121,10 @@ export class LinuxService {
             "OXR_NO_TEXTURE_SOURCE_ALPHA": "1",
         };
 
+        Object.assign(envVars, await this.buildFoveationEnvVariables(steamPath));
+
         if (isBsArm64Installed(bsFolderPath)) {
-            Object.assign(envVars, await this.buildBsArm64EnvVariables(steamPath, bsFolderPath));
+            Object.assign(envVars, await this.buildBsArm64EnvVariables(bsFolderPath));
         }
 
         if (launchOptions.launchMods?.includes(LaunchMods.PROTON_LOGS)) {
@@ -138,7 +140,7 @@ export class LinuxService {
     }
 
     // Native ARM64 instance (bs-arm64): see bs-arm64.service.ts
-    private async buildBsArm64EnvVariables(steamPath: string, bsFolderPath: string): Promise<Record<string, string>> {
+    private async buildBsArm64EnvVariables(bsFolderPath: string): Promise<Record<string, string>> {
         const runtimeDir = path.join(this.getCompatDataPath(), "pfx", "drive_c", "bs-arm64");
         const builtFor = tryit(() => fs.readFileSync(path.join(runtimeDir, "proton-version"), "utf8").trim()).result;
         const protonBuild = this.getProtonBuild();
@@ -154,18 +156,24 @@ export class LinuxService {
             WINEDLLPATH: runtimeDir,
             // Without mod support BSIPA's x64 Doorstop is still there: never load it
             WINEDLLOVERRIDES: isBsArm64ModsDisabled(bsFolderPath) ? "winhttp=b" : "winhttp=n,b",
-            // Valve's fdm_injection layer spins forever in vkCreateDevice under Proton ARM64
-            DISABLE_VULKAN_FDM_INJECTION_LAYER: "1",
         };
 
-        // Steam's "Foveated Rendering" game property drives bs-arm64's own eye-tracked
-        // foveated rendering (DXVK + the bs-arm64 OpenXR layer) instead
-        if (await SteamService.getInstance().isFoveatedRenderingEnabled(BS_APP_ID, steamPath).catch((): boolean => false)) {
-            log.info("Steam's Foveated Rendering is on for Beat Saber: enabling bs-arm64 foveated rendering");
-            envVars.BS_ARM64_FDM = "1";
-        }
-
         return envVars;
+    }
+
+    // Valve's foveated rendering (fdm_injection, SteamOS on the Steam Frame): its OpenXR half is an
+    // implicit layer, its Vulkan half must be enabled explicitly. Steam does that when Beat Saber's
+    // "Foveated Rendering" property is on. With only the OpenXR half active, the game hangs in
+    // vkCreateDevice, so otherwise turn both off.
+    private async buildFoveationEnvVariables(steamPath: string): Promise<Record<string, string>> {
+        if (await SteamService.getInstance().isFoveatedRenderingEnabled(BS_APP_ID, steamPath).catch((): boolean => false)) {
+            log.info("Steam's Foveated Rendering is on for Beat Saber: enabling SteamVR's foveated rendering");
+            return {
+                FDM_DEBUG: "enable",
+                VK_INSTANCE_LAYERS: "VK_LAYER_VALVE_rpo:VK_LAYER_VALVE_fdm_injection",
+            };
+        }
+        return { DISABLE_VULKAN_FDM_INJECTION_LAYER: "1" };
     }
 
     public async setProtonFolder(protonFolder: string): Promise<boolean> {

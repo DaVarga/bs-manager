@@ -68,13 +68,7 @@ When it prints `done`, BSManager is in the Frame's **Launch program** list (see 
 1. BSManager asks for your **Proton folder**. Choose
    `/home/steamos/.local/share/Steam/steamapps/common/Proton 11.0 (ARM64)`.
 2. Sign in with Steam and download or select Beat Saber **1.44.1**.
-3. In the version's **Launch** tab, enter this as launch command (it stays for all versions):
-   ```
-   DISABLE_VULKAN_FDM_INJECTION_LAYER=1 %command%
-   ```
-   Without it the game hangs at startup: Valve's foveated rendering layer never finishes setting up
-   the graphics device under Proton ARM64.
-4. **Launch** the version once and wait until the menu appears, then quit. The first start takes a
+3. **Launch** the version once and wait until the menu appears, then quit. The first start takes a
    while. It creates BSManager's Wine prefix, which mods and the native ARM64 build need.
 
 ## Native ARM64 Beat Saber
@@ -108,13 +102,21 @@ list). On ARM64 its loudness measurement is expensive and makes frame times less
 Tip: turn off **Screen Distortion** in the game's graphics settings. It costs a lot of GPU time on the
 Frame, and bs-arm64 v0.1.6 shows frozen ghost images with it on.
 
-Foveated rendering: open Beat Saber in your **Steam** library → ⚙ → **Properties** → **Performance**
-and turn on **Foveated Rendering**. BSManager reads that switch and starts the native version with
-eye-tracked foveated rendering: the area you look at is rendered at full resolution and the edges at
-lower resolution, which saves GPU time and battery. Eye tracking needs bs-arm64 0.2.0 or later; 0.1.7
-uses a fixed profile instead.
-
 Details: [bs-arm64](https://github.com/DaVarga/bs-arm64).
+
+## Foveated rendering
+
+Open Beat Saber in your **Steam** library → ⚙ → **Properties** → **Performance** and turn on
+**Foveated Rendering**. BSManager reads that switch and starts every version, x64 and native ARM64,
+with SteamVR's eye-tracked foveated rendering, as Steam does: the area you look at is rendered at full
+resolution and the edges at lower resolution, which saves GPU time and battery.
+
+Steam's default is mild. For stronger foveation, add `FDM_DEBUG=enable,med %command%` or
+`FDM_DEBUG=enable,hi %command%` as launch command in the version's **Launch** tab.
+
+Since BSManager **v1.6.0-frame.4** no launch command is needed. If you added
+`DISABLE_VULKAN_FDM_INJECTION_LAYER=1 %command%` as an earlier version of this guide said, remove it:
+it keeps foveated rendering off. Older versions still need it, or the game hangs at startup.
 
 ## Update or remove
 
