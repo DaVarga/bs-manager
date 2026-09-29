@@ -8,6 +8,8 @@ import { bsmExec } from "main/helpers/os.helpers";
 import { isBsArm64Installed, isBsArm64ModsDisabled } from "main/helpers/bs-arm64.helpers";
 import { BSLaunchError } from "shared/models/bs-launch";
 
+const mockFoveatedRendering = jest.fn(async () => false);
+
 jest.mock("electron", () => ({
     app: { getPath: () => "" },
 }));
@@ -34,6 +36,9 @@ jest.mock("main/helpers/bs-arm64.helpers", () => ({
 }));
 jest.mock("main/services/bs-launcher/abstract-launcher.service", () => ({
     buildBsLaunchArgs: jest.fn((): string[] => []),
+}));
+jest.mock("main/services/steam.service", () => ({
+    SteamService: { getInstance: jest.fn(() => ({ isFoveatedRenderingEnabled: mockFoveatedRendering })) },
 }));
 jest.mock("main/helpers/launchOptions.helper", () => ({
     parseLaunchOptions: jest.fn(() => ({ env: {}, cmdlet: "", args: "" })),
@@ -94,6 +99,38 @@ describe("LinuxService.buildEnvVariables", () => {
         (bsmExec as jest.Mock).mockRejectedValue(new Error("not nixos"));
         (isBsArm64Installed as jest.Mock).mockReturnValue(false);
         (isBsArm64ModsDisabled as jest.Mock).mockReturnValue(false);
+        mockFoveatedRendering.mockResolvedValue(false);
+    });
+
+    describe("SteamVR foveated rendering (Valve's fdm_injection)", () => {
+        it("turns the layer off while Steam's Foveated Rendering is off", async () => {
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(mockFoveatedRendering).toHaveBeenCalledWith(BS_APP_ID, steamPath);
+            expect(env.DISABLE_VULKAN_FDM_INJECTION_LAYER).toBe("1");
+            expect(env).not.toHaveProperty("FDM_DEBUG");
+            expect(env).not.toHaveProperty("VK_INSTANCE_LAYERS");
+        });
+
+        it("enables both halves of the layer like Steam when Foveated Rendering is on", async () => {
+            mockFoveatedRendering.mockResolvedValue(true);
+
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(env).toEqual(expect.objectContaining({
+                FDM_DEBUG: "enable",
+                VK_INSTANCE_LAYERS: "VK_LAYER_VALVE_rpo:VK_LAYER_VALVE_fdm_injection",
+            }));
+            expect(env).not.toHaveProperty("DISABLE_VULKAN_FDM_INJECTION_LAYER");
+        });
+
+        it("turns the layer off if Steam's settings can't be read", async () => {
+            mockFoveatedRendering.mockRejectedValue(new Error("no localconfig.vdf"));
+
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(env.DISABLE_VULKAN_FDM_INJECTION_LAYER).toBe("1");
+        });
     });
 
     describe("native ARM64 instance (bs-arm64)", () => {
@@ -127,6 +164,21 @@ describe("LinuxService.buildEnvVariables", () => {
                 WINEDLLOVERRIDES: "winhttp=n,b",
                 DISABLE_VULKAN_FDM_INJECTION_LAYER: "1",
             }));
+        });
+
+        it("uses SteamVR's foveated rendering, not its own, when Foveated Rendering is on", async () => {
+            mockProtonBuilds("proton-11.0-2c-arm64", "proton-11.0-2c-arm64");
+            mockFoveatedRendering.mockResolvedValue(true);
+
+            const env = await buildService().buildEnvVariables(buildLaunchOption(), steamPath, bsFolderPath);
+
+            expect(env).toEqual(expect.objectContaining({
+                WINEDLLPATH: runtimeDir,
+                FDM_DEBUG: "enable",
+                VK_INSTANCE_LAYERS: "VK_LAYER_VALVE_rpo:VK_LAYER_VALVE_fdm_injection",
+            }));
+            expect(env).not.toHaveProperty("DISABLE_VULKAN_FDM_INJECTION_LAYER");
+            expect(env).not.toHaveProperty("BS_ARM64_FDM");
         });
 
         it("never loads Doorstop when installed without mod support", async () => {
