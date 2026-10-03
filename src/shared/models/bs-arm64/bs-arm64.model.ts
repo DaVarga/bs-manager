@@ -6,13 +6,15 @@
 
 export const BS_ARM64_REPOSITORY = "DaVarga/bs-arm64";
 
-// Game versions the bs-arm64 releases support (the installer checks it again).
-export const BS_ARM64_SUPPORTED_VERSIONS = ["1.44.1"];
+// Unity engine versions the bs-arm64 runtime supports. The native runtime (player, mono, plugins)
+// is engine-specific, not Beat Saber-version specific, so any game build on this engine works.
+// The installer checks it again (engine_version() in bs-arm64.sh).
+export const BS_ARM64_SUPPORTED_ENGINES = ["6000.0.40f1"];
 
 export enum BsArm64Unsupported {
     NOT_LINUX_ARM64 = "NOT_LINUX_ARM64",
     PROTON_NOT_ARM64 = "PROTON_NOT_ARM64",
-    VERSION_NOT_SUPPORTED = "VERSION_NOT_SUPPORTED",
+    ENGINE_NOT_SUPPORTED = "ENGINE_NOT_SUPPORTED",
 }
 
 export interface BsArm64Status {

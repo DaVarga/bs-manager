@@ -73,7 +73,7 @@
                 "unsupported": {
                     "NOT_LINUX_ARM64": "Only available on ARM64 Linux.",
                     "PROTON_NOT_ARM64": "Select an ARM64 Proton (e.g. \"Proton 11.0 (ARM64)\") in the settings.",
-                    "VERSION_NOT_SUPPORTED": "Not available for this Beat Saber version yet. Supported: 1.44.1."
+                    "ENGINE_NOT_SUPPORTED": "Not available for this game's Unity engine yet. Supported engine: 6000.0.40f1."
                 },
                 "notifications": {
                     "install-success": "Native ARM64 build installed",
