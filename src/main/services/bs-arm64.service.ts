@@ -7,7 +7,7 @@ import { Observable, lastValueFrom, tap } from "rxjs";
 import { BSVersion } from "shared/bs-version.interface";
 import {
     BS_ARM64_REPOSITORY,
-    BS_ARM64_SUPPORTED_VERSIONS,
+    BS_ARM64_SUPPORTED_ENGINES,
     BsArm64Error,
     BsArm64InstallOptions,
     BsArm64Progress,
@@ -18,7 +18,7 @@ import { CustomError } from "shared/models/exceptions/custom-error.class";
 import { tryit } from "shared/helpers/error.helpers";
 import { BsmShellLog, bsmSpawn } from "main/helpers/os.helpers";
 import { IS_FLATPAK } from "main/constants";
-import { BS_ARM64_STATE_DIR, isBsArm64Installed, isBsArm64ModsDisabled } from "main/helpers/bs-arm64.helpers";
+import { BS_ARM64_STATE_DIR, isBsArm64Installed, isBsArm64ModsDisabled, readBsArm64Engine } from "main/helpers/bs-arm64.helpers";
 import { BSLocalVersionService } from "./bs-local-version.service";
 import { InstallationLocationService } from "./installation-location.service";
 import { LinuxService } from "./linux.service";
@@ -98,8 +98,8 @@ export class BsArm64Service {
             status.unsupported = BsArm64Unsupported.NOT_LINUX_ARM64;
         } else if (!tryit(() => this.linux.isArm64Wine()).result) {
             status.unsupported = BsArm64Unsupported.PROTON_NOT_ARM64;
-        } else if (!BS_ARM64_SUPPORTED_VERSIONS.includes(version.BSVersion)) {
-            status.unsupported = BsArm64Unsupported.VERSION_NOT_SUPPORTED;
+        } else if (!BS_ARM64_SUPPORTED_ENGINES.includes((await readBsArm64Engine(versionPath)) ?? "")) {
+            status.unsupported = BsArm64Unsupported.ENGINE_NOT_SUPPORTED;
         }
 
         return status;

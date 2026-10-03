@@ -1,4 +1,8 @@
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { findBsArm64ReleaseAsset, GithubRelease } from "main/services/bs-arm64.service";
+import { readBsArm64Engine } from "main/helpers/bs-arm64.helpers";
 
 jest.mock("electron", () => ({ app: { getPath: () => "", getVersion: () => "0.0.0" } }));
 jest.mock("electron-log", () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
@@ -46,5 +50,43 @@ describe("findBsArm64ReleaseAsset", () => {
     it("finds nothing without a Proton build or matching release", () => {
         expect(findBsArm64ReleaseAsset(releases, undefined)).toBeUndefined();
         expect(findBsArm64ReleaseAsset(releases, "proton-10.0-arm64")).toBeUndefined();
+    });
+});
+
+describe("readBsArm64Engine", () => {
+    let dir: string;
+
+    beforeEach(async () => {
+        dir = await mkdtemp(path.join(os.tmpdir(), "bs-arm64-engine-"));
+        await mkdir(path.join(dir, "Beat Saber_Data"), { recursive: true });
+    });
+
+    afterEach(async () => {
+        await rm(dir, { recursive: true, force: true });
+    });
+
+    async function writeGlobalGameManagers(content: Buffer | string): Promise<void> {
+        await writeFile(path.join(dir, "Beat Saber_Data", "globalgamemanagers"), content);
+    }
+
+    it("extracts the engine version from the file header", async () => {
+        // The engine string sits in the serialized header, surrounded by binary bytes.
+        const blob = Buffer.concat([Buffer.from([0, 1, 2, 3]), Buffer.from("6000.0.40f1\0"), Buffer.from([4, 5, 6])]);
+        await writeGlobalGameManagers(blob);
+        expect(await readBsArm64Engine(dir)).toBe("6000.0.40f1");
+    });
+
+    it("returns the first match when the string appears more than once", async () => {
+        await writeGlobalGameManagers("...6000.0.40f1...later...6000.0.40f1...");
+        expect(await readBsArm64Engine(dir)).toBe("6000.0.40f1");
+    });
+
+    it("returns undefined when there is no engine string", async () => {
+        await writeGlobalGameManagers("no version here");
+        expect(await readBsArm64Engine(dir)).toBeUndefined();
+    });
+
+    it("returns undefined when the file is missing", async () => {
+        expect(await readBsArm64Engine(dir)).toBeUndefined();
     });
 });
