@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Steam Frame fork.** This fork runs on ARM64 SteamOS and adds an **ARM64 tab** that installs a
-> native ARM64 build of Beat Saber 1.44.1 ([bs-arm64](https://github.com/DaVarga/bs-arm64)).
+> native ARM64 build of Beat Saber 1.40.9 through 1.44.1 ([bs-arm64](https://github.com/DaVarga/bs-arm64)).
 > **[How to install on the Steam Frame](docs/steam-frame.md)**
 >
 > Unofficial; the original project is [Zagrios/bs-manager](https://github.com/Zagrios/bs-manager).
