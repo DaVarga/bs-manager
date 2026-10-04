@@ -29,11 +29,16 @@ export function Arm64Slide({ version, status, onStatusChange }: Props) {
     const [logLines, setLogLines] = useState<string[]>([]);
     const logRef = useRef<HTMLPreElement>(null);
 
+    // Mod support needs a BSIPA version the release was tested with
+    const modsAvailable = !status?.modsUnavailable;
+
     useEffect(() => {
-        if (status?.installed) {
+        if (!modsAvailable) {
+            setMods(false);
+        } else if (status?.installed) {
             setMods(status.mods);
         }
-    }, [status?.installed, status?.mods]);
+    }, [status?.installed, status?.mods, modsAvailable]);
 
     useEffect(() => {
         logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -87,7 +92,12 @@ export function Arm64Slide({ version, status, onStatusChange }: Props) {
                 </div>
 
                 {status?.unsupported ? (
-                    <p className="text-sm font-bold text-red-500">{t(`pages.version-viewer.arm64.unsupported.${status.unsupported}`)}</p>
+                    <p className="text-sm font-bold text-red-500">
+                        {t(`pages.version-viewer.arm64.unsupported.${status.unsupported}`, {
+                            versions: status.supportedVersions?.join(", ") ?? "?",
+                            proton: status.protonVersion ?? "?",
+                        })}
+                    </p>
                 ) : (
                     <>
                         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -108,9 +118,14 @@ export function Arm64Slide({ version, status, onStatusChange }: Props) {
                         )}
 
                         <div className="flex items-center gap-2 text-sm w-fit">
-                            <BsmCheckbox className="h-5 w-5 relative" checked={mods} disabled={busy} onChange={setMods} />
+                            <BsmCheckbox className="h-5 w-5 relative" checked={mods} disabled={busy || !modsAvailable} onChange={setMods} />
                             <span>{t("pages.version-viewer.arm64.mod-support")}</span>
                         </div>
+                        {!modsAvailable && (
+                            <p className="text-sm text-yellow-500">
+                                {t(`pages.version-viewer.arm64.mods-unavailable.${status.modsUnavailable}`, { bsipa: status.bsipaVersion ?? "?" })}
+                            </p>
+                        )}
 
                         <div className="flex gap-2">
                             <BsmButton
