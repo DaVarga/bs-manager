@@ -10,7 +10,7 @@ import { deleteFile, deleteFolder, pathExist, Progression } from "../../helpers/
 import { lastValueFrom, Observable } from "rxjs";
 import recursiveReadDir from "recursive-readdir";
 import { sToMs } from "../../../shared/helpers/time.helpers";
-import { copyFile, ensureDir, pathExistsSync, readdirSync } from "fs-extra";
+import { copyFile, ensureDir, pathExistsSync, readdirSync, readFile, writeFile } from "fs-extra";
 import { CustomError } from "shared/models/exceptions/custom-error.class";
 import { popElement } from "shared/helpers/array.helpers";
 import { LinuxService } from "../linux.service";
@@ -18,6 +18,7 @@ import { tryit } from "shared/helpers/error.helpers";
 import crypto from "crypto";
 import { BsmZipExtractor } from "main/models/bsm-zip-extractor.class";
 import { BsmShellLog, bsmSpawn } from "main/helpers/os.helpers";
+import { setDotNet32BitRequired } from "main/helpers/dotnet.helpers";
 import { BbmFullMod, BbmModVersion, ExternalMod } from "../../../shared/models/mods/mod.interface";
 import { SteamService } from "../steam.service";
 
@@ -157,67 +158,90 @@ export class BsModsManagerService {
             return false;
         }
 
-        const command = await this.getCommand(ipaPath, bsExePath, args);
-        if (!command) {
-            return false;
+        const runnableIpaPath = await this.getRunnableIpaPath(ipaPath);
+        try {
+            const command = await this.getCommand(runnableIpaPath, bsExePath, args);
+            if (!command) {
+                return false;
+            }
+
+            return await new Promise<boolean>(resolve => {
+                const processIPA = bsmSpawn(command.command, {
+                    log: BsmShellLog.Command | BsmShellLog.EnvVariables,
+                    options: {
+                        cwd: versionPath,
+                        shell: true,
+                        env: command.env,
+                        stdio: ["ignore", "pipe", "pipe"],
+                    },
+                    flatpak: {
+                        host: IS_FLATPAK,
+                        env: [
+                            "STEAM_COMPAT_DATA_PATH",
+                            "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+                        ],
+                    },
+                });
+
+                let settled = false;
+                const finish = (success: boolean) => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
+                    clearTimeout(timeout);
+                    resolve(success);
+                };
+
+                const timeout = setTimeout(() => {
+                    log.info("IPA process timed out");
+                    finish(false);
+                }, sToMs(30));
+
+                processIPA.stdout?.on("data", data => {
+                    log.info("IPA process stdout", data.toString());
+                });
+                processIPA.stderr?.on("data", data => {
+                    log.error("IPA process stderr", data.toString());
+                });
+
+                processIPA.once("error", error => {
+                    log.error("IPA process failed to start", error);
+                    finish(false);
+                });
+
+                // Unlike "exit", "close" is emitted after stdout and stderr have
+                // been closed, ensuring all IPA output is forwarded before resolving.
+                processIPA.once("close", code => {
+                    if (code === 0) {
+                        return finish(true);
+                    }
+                    log.error("IPA process exited with non-zero code", code);
+                    finish(false);
+                });
+            });
+        } finally {
+            if (runnableIpaPath !== ipaPath) {
+                await deleteFile(runnableIpaPath).catch(e => log.error("Could not delete x86 IPA copy", e));
+            }
+        }
+    }
+
+    /**
+     * IPA.exe is an AnyCPU .NET assembly. ARM64 Wine runs those as native ARM64
+     * processes, but wine-mono only ships x86/x86_64 builds, so Mono fails to load.
+     * Run a copy flagged 32BITREQUIRED instead, which Wine runs as x86 through FEX.
+     * IPA.exe itself is left untouched since its hash is checked.
+     */
+    private async getRunnableIpaPath(ipaPath: string): Promise<string> {
+        if (process.platform !== "linux" || !tryit(() => this.linuxService.isArm64Wine()).result) {
+            return ipaPath;
         }
 
-        return new Promise<boolean>(resolve => {
-            const processIPA = bsmSpawn(command.command, {
-                log: BsmShellLog.Command | BsmShellLog.EnvVariables,
-                options: {
-                    cwd: versionPath,
-                    shell: true,
-                    env: command.env,
-                    stdio: ["ignore", "pipe", "pipe"],
-                },
-                flatpak: {
-                    host: IS_FLATPAK,
-                    env: [
-                        "STEAM_COMPAT_DATA_PATH",
-                        "STEAM_COMPAT_CLIENT_INSTALL_PATH",
-                    ],
-                },
-            });
-
-            let settled = false;
-            const finish = (success: boolean) => {
-                if (settled) {
-                    return;
-                }
-
-                settled = true;
-                clearTimeout(timeout);
-                resolve(success);
-            };
-
-            const timeout = setTimeout(() => {
-                log.info("IPA process timed out");
-                finish(false);
-            }, sToMs(30));
-
-            processIPA.stdout?.on("data", data => {
-                log.info("IPA process stdout", data.toString());
-            });
-            processIPA.stderr?.on("data", data => {
-                log.error("IPA process stderr", data.toString());
-            });
-
-            processIPA.once("error", error => {
-                log.error("IPA process failed to start", error);
-                finish(false);
-            });
-
-            // Unlike "exit", "close" is emitted after stdout and stderr have
-            // been closed, ensuring all IPA output is forwarded before resolving.
-            processIPA.once("close", code => {
-                if (code === 0) {
-                    return finish(true);
-                }
-                log.error("IPA process exited with non-zero code", code);
-                finish(false);
-            });
-        });
+        const x86IpaPath = path.join(path.dirname(ipaPath), "IPA.x86.exe");
+        await writeFile(x86IpaPath, setDotNet32BitRequired(await readFile(ipaPath)));
+        return x86IpaPath;
     }
 
     private async getCommand(
