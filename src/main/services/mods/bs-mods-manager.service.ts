@@ -441,6 +441,16 @@ export class BsModsManagerService {
         await Promise.all(promises);
     }
 
+    /** Installed BSIPA version, else the one BeatMods offers for this game version. */
+    public async getBsipaVersion(version: BSVersion): Promise<string | undefined> {
+        const installed = await this.getBsipaInstalled(version);
+        if (installed) {
+            return installed.modVersion;
+        }
+        const available = await this.getAvailableMods(version);
+        return available.find(mod => mod.mod.name.toLowerCase() === "bsipa")?.version.modVersion;
+    }
+
     public async getAvailableMods(version: BSVersion): Promise<BbmFullMod[]> {
         return this.beatModsApi.getVersionMods(version).catch(() => {
             return [] as BbmFullMod[];
