@@ -67,22 +67,26 @@ When it prints `done`, BSManager is in the Frame's **Launch program** list (see 
 
 1. BSManager asks for your **Proton folder**. Choose
    `/home/steamos/.local/share/Steam/steamapps/common/Proton 11.0 (ARM64)`.
-2. Sign in with Steam and download or select Beat Saber **1.44.1**.
+2. Sign in with Steam and download or select a Beat Saber version the native ARM64 build supports:
+   **1.40.9 through 1.44.1** (see bs-arm64's
+   [Game versions](https://github.com/DaVarga/bs-arm64#game-versions)).
 3. **Launch** the version once and wait until the menu appears, then quit. The first start takes a
    while. It creates BSManager's Wine prefix, which mods and the native ARM64 build need.
 
 ## Native ARM64 Beat Saber
 
-BSManager runs the x64 version of Beat Saber through emulation. For **1.44.1** it can install a
-native ARM64 build instead, which needs less than half the CPU time per frame:
+BSManager runs the x64 version of Beat Saber through emulation. For the versions the matching
+bs-arm64 release was tested with (1.40.9 through 1.44.1) it can install a native ARM64 build instead,
+which needs less than half the CPU time per frame. The ARM64 tab shows that list for other versions.
 
-1. Select Beat Saber **1.44.1** in BSManager (launched once, see [First start](#first-start)). To
+1. Select the Beat Saber version in BSManager (launched once, see [First start](#first-start)). To
    keep the x64 version too, work on a copy: gear menu at the top right → **Clone**.
 
    ![Version menu with Clone](images/steam-frame/bsm-clone.webp)
 
 2. Open the **ARM64** tab next to Mods and click **Install**. Keep **Mod support (BSIPA)** checked to
-   use mods.
+   use mods. It's only available with a BSIPA version the release was tested with; BeatMods has no
+   mods for 1.40.9–1.40.13, so those install without mods.
 
    ![ARM64 tab before installing](images/steam-frame/bsm-arm64-tab.webp)
 
