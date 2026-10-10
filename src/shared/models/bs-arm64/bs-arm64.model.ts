@@ -6,18 +6,26 @@
 
 export const BS_ARM64_REPOSITORY = "DaVarga/bs-arm64";
 
-// bs-arm64-manifest.json of a release (0.3.0 and later): what the release was tested with
+// bs-arm64-manifest.json of a release (0.3.2 and later): what the release was tested with
 export const BS_ARM64_MANIFEST_ASSET = "bs-arm64-manifest.json";
+
+export interface BsArm64ProtonVersion {
+    // Release asset to install for this Proton version, e.g. "bs-arm64-v0.3.2-proton-11.0-2c.tar.gz"
+    artifact: string;
+}
 
 export interface BsArm64Manifest {
     version: string;
+    // Proton version the DLLs are built against (kept for older BSManager versions)
     proton: string;
+    // Proton versions the DLLs work with, by Proton tag ("proton-11.0-2e"), each tested on the Steam Frame
+    protonVersions: Record<string, BsArm64ProtonVersion>;
     unityVersions: string[];
     bsVersions: string[];
     bsipaVersions: string[];
 }
 
-// Releases without a manifest (0.2.2 and older), or when it can't be fetched
+// When GitHub can't be reached
 export const BS_ARM64_FALLBACK_MANIFEST: Pick<BsArm64Manifest, "bsVersions" | "bsipaVersions"> = {
     bsVersions: ["1.44.1"],
     bsipaVersions: ["4.3.7"],
