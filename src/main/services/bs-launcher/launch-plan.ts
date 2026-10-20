@@ -2,6 +2,7 @@ import path from "path";
 import log from "electron-log";
 import { BS_APP_ID, BS_EXECUTABLE } from "main/constants";
 import { parseLaunchOptions } from "main/helpers/launchOptions.helper";
+import { cleanSearchPath } from "main/helpers/env.helpers";
 import { BSM_LAUNCH_TOKEN_ENV } from "main/helpers/os.helpers";
 import { LaunchOption } from "shared/models/bs-launch";
 import { LaunchMods } from "shared/models/bs-launch/launch-option.interface";
@@ -105,6 +106,13 @@ export async function planLaunch(request: LaunchRequest, context: LaunchContext)
         } : {}),
         ...runtime.gameEnv(launchMods, gameFolder),
     };
+    // BSManager's AppImage puts its own share dir in XDG_DATA_DIRS and appends /usr/share/ again. The
+    // game's Vulkan and OpenXR loaders then find layers such as Valve's fdm_injection twice, and that
+    // one hangs in vkCreateDevice.
+    const xdgDataDirs = context.platform === "linux" ? cleanSearchPath(context.baseEnv.XDG_DATA_DIRS, context.baseEnv.APPDIR) : undefined;
+    if (xdgDataDirs && xdgDataDirs !== context.baseEnv.XDG_DATA_DIRS) {
+        planEnv.XDG_DATA_DIRS = xdgDataDirs;
+    }
     logUserEnv(userEnv, { ...context.baseEnv, ...planEnv });
     Object.assign(planEnv, userEnv);
 

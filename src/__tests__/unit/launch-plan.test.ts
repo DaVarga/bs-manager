@@ -188,6 +188,16 @@ describe("planLaunch", () => {
         expect(plan.hostEnvKeys).not.toContain("PROTON_LOG_DIR");
     });
 
+    it("gives the game XDG_DATA_DIRS without the AppImage's entries and duplicates on Linux", async () => {
+        const appImage = {
+            ...context({ platform: "linux" }),
+            baseEnv: { ...BASE_ENV, APPDIR: "/tmp/.mount_BSM", XDG_DATA_DIRS: "/tmp/.mount_BSM/usr/share:/usr/share:/usr/share/" },
+        };
+        const plan = await planLaunch(request({}), appImage);
+
+        expect(plan.env.XDG_DATA_DIRS).toBe("/usr/share");
+    });
+
     it("spawns locally outside Flatpak", async () => {
         const plan = withLaunchToken(await planLaunch(request({}), context({ platform: "linux" })), "token");
 

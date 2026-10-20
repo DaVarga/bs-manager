@@ -1,4 +1,4 @@
-import { parseEnvString } from "main/helpers/env.helpers";
+import { cleanSearchPath, parseEnvString } from "main/helpers/env.helpers";
 
 describe("Test parseEnvString", () => {
 
@@ -87,5 +87,23 @@ describe("Test parseEnvString", () => {
         }));
         expect(command).toBe("gamescope -h 720 -H 1440 -S integer -- %command%");
     })
+
+});
+
+describe("cleanSearchPath", () => {
+
+    it("keeps each directory once, with or without a trailing slash", () => {
+        expect(cleanSearchPath("/usr/local/share:/usr/share:/usr/share/gnome:/usr/local/share/:/usr/share/"))
+            .toBe("/usr/local/share:/usr/share:/usr/share/gnome");
+    });
+
+    it("drops the AppImage's own directories and empty entries", () => {
+        expect(cleanSearchPath("/tmp/.mount_BSMana1/usr/share/::/home/u/.local/share/flatpak/exports/share:/usr/share", "/tmp/.mount_BSMana1"))
+            .toBe("/home/u/.local/share/flatpak/exports/share:/usr/share");
+    });
+
+    it("leaves an unset path unset", () => {
+        expect(cleanSearchPath(undefined, "/tmp/.mount_x")).toBeUndefined();
+    });
 
 });
