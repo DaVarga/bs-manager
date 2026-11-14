@@ -46,7 +46,7 @@ jobs:
             - name: Build AppImage
               run: |
                   args=(--config electron-builder.config.js --publish never --linux AppImage --arm64
-                        "-c.publish.owner=${{ github.repository_owner }}")
+                        "-c.publish.owner=${{ github.repository_owner }}" "-c.toolsets.appimage=1.0.3")
                   if [ "${{ github.ref_type }}" = tag ]; then
                       args+=("-c.extraMetadata.version=${GITHUB_REF_NAME#v}")
                   fi
